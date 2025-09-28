@@ -1,0 +1,100 @@
+import math
+from collections import defaultdict
+import heapq
+
+# ==========================
+# 1. Base de Conocimiento
+# ==========================
+knowledge_base = """
+station(banderas, 0, 0).
+station(calle80, 2, 1).
+station(chapinero, 4, 3).
+station(marly, 5, 5).
+station(eldorado, 1, 4).
+station(salitre, 3, 6).
+
+line(a1, banderas, chapinero, marly).
+line(b2, calle80, chapinero, salitre).
+line(c3, banderas, eldorado, salitre).
+
+frequency(a1, 5).
+frequency(b2, 7).
+frequency(c3, 10).
+
+transfer(chapinero, 4).
+transfer(salitre, 5).
+"""
+
+# ==========================
+# 2. Parseo de la KB
+# ==========================
+stations = {}
+lines = defaultdict(list)
+frequencies = {}
+transfers = {}
+graph = defaultdict(list)
+
+for line in knowledge_base.strip().split("\n"):
+    line = line.strip().lower()
+    if line.startswith("station"):
+        name, x, y = line[8:-2].split(",")
+        stations[name.strip()] = (int(x), int(y))
+    elif line.startswith("line"):
+        parts = line[5:-2].split(",")
+        line_name = parts[0].strip()
+        stops = [p.strip() for p in parts[1:]]
+        lines[line_name] = stops
+    elif line.startswith("frequency"):
+        lname, f = line[10:-2].split(",")
+        frequencies[lname.strip()] = int(f.strip())
+    elif line.startswith("transfer"):
+        sname, t = line[9:-2].split(",")
+        transfers[sname.strip()] = int(t.strip())
+
+# ==========================
+# 3. Construcción del grafo
+# ==========================
+def distance(a, b):
+    (x1, y1), (x2, y2) = stations[a], stations[b]
+    return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+
+for line_name, stops in lines.items():
+    freq = frequencies[line_name]
+    for i in range(len(stops) - 1):
+        a, b = stops[i], stops[i+1]
+        cost = distance(a, b) + freq/2  # tiempo de viaje + espera promedio
+        graph[a].append((b, cost, line_name))
+        graph[b].append((a, cost, line_name))
+
+for s, t in transfers.items():
+    graph[s].append((s, t, "transfer"))
+
+# ==========================
+# 4. Algoritmo A*
+# ==========================
+def astar_search(start, goal):
+    open_set = [(0, start, [], 0)]  # (f_score, nodo, camino, g_score)
+    visited = set()
+    while open_set:
+        f, current, path, g = heapq.heappop(open_set)
+        if current in visited:
+            continue
+        visited.add(current)
+        path = path + [current]
+        if current == goal:
+            return path, g
+        for neighbor, cost, line in graph[current]:
+            if neighbor not in visited:
+                g2 = g + cost
+                h = distance(neighbor, goal)  # heurística
+                heapq.heappush(open_set, (g2 + h, neighbor, path, g2))
+    return None, float("inf")
+
+# ==========================
+# 5. Consulta
+# ==========================
+start, goal = "banderas", "marly"
+path, cost = astar_search(start, goal)
+
+print("Ruta encontrada:", path)
+print("Tiempo total estimado:", round(cost, 2), "minutos")
